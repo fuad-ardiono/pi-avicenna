@@ -1,0 +1,87 @@
+version: 1
+# IMPORTANT: Indentation must remain consistent. The Pi runtime extension
+# (subagent.ts) parses this file using section-scoped regex extraction, not a
+# full YAML parser. Do not reformat indentation levels, use block scalars,
+# or add YAML anchors/aliases without updating the parser.
+description: >
+  Host-specific delegation registry for pi-avicenna roles. Role contracts remain
+  in `agents/*.md`. This file tells a host runtime which sub-agent tool flavor
+  to use for each delegated role.
+
+roles:
+  commander:
+    delegated: false
+    contract_file: agents/commander.md
+
+  researcher:
+    delegated: true
+    contract_file: agents/researcher.md
+    claude:
+      tool: Agent
+      subagent_type: Explore
+      description_template: "Research {{task_summary_short}}"
+    codex:
+      tool: spawn_agent
+      agent_type: explorer
+    pi:
+      tool: pi_avicenna_spawn
+      role: researcher
+      team_path_enabled: true
+      team_tool: team
+      team: research
+
+  coder:
+    delegated: true
+    contract_file: agents/coder.md
+    claude:
+      tool: Agent
+      subagent_type: general-purpose
+      description_template: "Implement {{task_summary_short}}"
+    codex:
+      tool: spawn_agent
+      agent_type: worker
+    pi:
+      tool: pi_avicenna_spawn
+      role: coder
+      team_path_enabled: true
+      team_tool: team
+      team: implementation
+      # model_hint and model_fallback_chain are resolved from
+      # .pi-avicenna/model-policy.yaml (role_tiers + host_models)
+      # at runtime. Override here only for explicit per-role overrides.
+      model_hint: ""
+      model_fallback_chain: ""
+
+  qa:
+    delegated: true
+    contract_file: agents/qa.md
+    claude:
+      tool: Agent
+      subagent_type: feature-dev:code-reviewer
+      description_template: "Review {{task_summary_short}}"
+    codex:
+      tool: spawn_agent
+      agent_type: explorer
+    pi:
+      tool: pi_avicenna_spawn
+      role: qa
+      team_path_enabled: true
+      team_tool: team
+      team: review
+
+  pr_monkey:
+    delegated: true
+    contract_file: agents/pr_monkey.md
+    claude:
+      tool: Agent
+      subagent_type: general-purpose
+      description_template: "Maintain PR {{task_summary_short}}"
+    codex:
+      tool: spawn_agent
+      agent_type: default
+    pi:
+      tool: pi_avicenna_spawn
+      role: pr_monkey
+      team_path_enabled: true
+      team_tool: team
+      team: default

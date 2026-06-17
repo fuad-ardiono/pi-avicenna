@@ -1,0 +1,7 @@
+interface:
+  display_name: "Pi Avicenna"
+  short_description: "Manual entrypoint for pi-avicenna workflow"
+  default_prompt: "Use $pi-avicenna to run the explicit pi-avicenna orchestration workflow in this repository."
+
+policy:
+  allow_implicit_invocation: false

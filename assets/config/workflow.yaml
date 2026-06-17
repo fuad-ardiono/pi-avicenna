@@ -1,0 +1,195 @@
+version: 1
+description: >
+  Canonical commander workflow for pi-avicenna v1. This file defines the
+  normal task lifecycle, allowed state transitions, and non-phase overlays
+  used for recovery and interruption handling.
+
+states:
+  intake:
+    purpose: Capture the incoming request, initialize hub state, and clarify the problem before research begins.
+    allowed_transitions:
+      - research
+      - blocked
+    exit_criteria:
+      - Warm-up checklist is executed.
+      - "Runtime artifacts are located per `runtime_behavior.artifact_location` setting."
+      - "If artifacts are repo-local, `.pi-avicenna/` ignore rule is present in `.gitignore`."
+      - "Auxiliary skill preflight is recorded from `config/skill-dependencies.md`."
+      - "`obra/brainstorming` is invoked to restate the task, assumptions, and success criteria."
+      - Task summary is recorded in the hub.
+      - Initial risk assessment is recorded.
+      - Success criteria and obvious dependencies are noted.
+      - "Wiki index is read for project context if wiki is configured."
+
+  research:
+    purpose: Validate assumptions and gather context before implementation planning.
+    allowed_transitions:
+      - planning
+      - waiting_for_human
+      - blocked
+    exit_criteria:
+      - "Research sub-agent is invoked using `agents/registry.yaml`."
+      - "Research sub-agent invokes `obra/brainstorming` in research mode."
+      - Research sub-agent output or blocker is recorded.
+      - Research findings are written to GitHub.
+      - Open questions are identified.
+      - "Research findings are structured with `obra/making-plans` into a planning-ready handoff."
+      - Risks and constraints are summarized for planning.
+      - "Research findings are appended to `.draft/<task-id>/insights.md` if wiki is configured."
+
+  planning:
+    purpose: Decide execution shape, create implementation scope, and allocate isolation.
+    allowed_transitions:
+      - coding
+      - waiting_for_human
+      - blocked
+    exit_criteria:
+      - "`obra/brainstorming` is invoked in interactive mode to present the design."
+      - "`obra/making-plans` is invoked and an explicit implementation plan is recorded."
+      - Single-agent or multi-agent decision is recorded.
+      - Implementation issues are created or updated.
+      - Worktree allocation decision is recorded.
+      - "Planning decisions are appended to `.draft/<task-id>/decisions.md` if wiki is configured."
+
+  coding:
+    purpose: Execute the scoped implementation work in the assigned branch and optional worktree.
+    allowed_transitions:
+      - qa
+      - blocked
+    exit_criteria:
+      - "Coder sub-agent is invoked using `agents/registry.yaml`."
+      - "Coder sub-agent invokes `obra/executing-plans` against the approved plan."
+      - Coder sub-agent output or blocker is recorded.
+      - PR exists or implementation checkpoint is recorded.
+      - Relevant implementation notes are written back to GitHub or hub state.
+      - "Implementation discoveries are appended to `.draft/<task-id>/insights.md` if wiki is configured."
+
+  qa:
+    purpose: Review implementation against issue scope, research findings, and risk profile.
+    allowed_transitions:
+      - coding
+      - waiting_for_human
+      - complete
+      - blocked
+    exit_criteria:
+      - "QA sub-agent is invoked using `agents/registry.yaml`."
+      - QA sub-agent output or blocker is recorded.
+      - QA disposition is recorded.
+      - Required changes or escalation reason is explicit.
+      - "L1 items confirmed or challenged by QA are noted in `.draft/<task-id>/notes.md` if wiki is configured."
+
+  waiting_for_human:
+    purpose: Pause automation until a required human decision or verification is received.
+    allowed_transitions:
+      - planning
+      - coding
+      - qa
+      - cleanup
+      - blocked
+    exit_criteria:
+      - Human decision or verification is recorded.
+      - Next execution state is chosen explicitly.
+
+  complete:
+    purpose: Mark the task as satisfied before operational cleanup begins.
+    allowed_transitions:
+      - cleanup
+    exit_criteria:
+      - Completion status is posted to GitHub.
+      - Issues and PR references are up to date.
+      - Required QA and human signoff are recorded.
+      - "Wiki ingest is recorded (items promoted count + items discarded count) if wiki is configured."
+      - "Wiki index and log are updated with promoted items if wiki is configured."
+      - "`.draft/<task-id>/` is cleaned up after promotion if wiki is configured."
+
+  cleanup:
+    purpose: Clean operational residue and close the orchestration loop safely.
+    allowed_transitions: []
+    exit_criteria:
+      - Worktree state is checked and recorded.
+      - Dirty-state handling is resolved explicitly.
+      - Branch cleanup follows repository policy.
+      - Repository is returned to main branch with latest pulled.
+      - Temporary pi-avicenna residue is cleaned if present.
+      - Repo state is confirmed clean before session ends.
+
+overlays:
+  blocked:
+    purpose: >
+      Indicates progress is paused because the current state cannot continue
+      safely or productively.
+    can_apply_to:
+      - intake
+      - research
+      - planning
+      - coding
+      - qa
+      - waiting_for_human
+      - complete
+      - cleanup
+    required_fields:
+      - blocked_reason
+      - blocked_since
+      - next_unblock_action
+
+  reconstructed:
+    purpose: >
+      Indicates hub state was rebuilt from GitHub artifacts after corruption,
+      loss, or inconsistency.
+    can_apply_to:
+      - intake
+      - research
+      - planning
+      - coding
+      - qa
+      - waiting_for_human
+      - complete
+      - cleanup
+    required_fields:
+      - reconstructed_at
+      - reconstruction_source
+      - reconstruction_notes
+
+runtime_behavior:
+  polling:
+    enabled: true
+    default_cadence_seconds: 300
+    description: >
+      When commander spawns a sub-agent and is waiting for results, it must
+      poll on a fixed cadence and proactively report status to the user.
+      Reports should indicate: still running, completed, or blocked.
+  artifact_location:
+    default: external
+    description: >
+      Runtime artifacts (.pi-avicenna/ state, gitignore entries) should NOT be
+      created in the target repository by default. Prefer keeping pi-avicenna
+      state in the external skill package directory. If local repo state is
+      required, commander must ask the user first before creating any artifacts.
+  missing_runtime:
+    behavior: external_runtime
+    description: >
+      When repo-local pi-avicenna artifacts (skills/pi-avicenna/, config/,
+      .pi-avicenna/) do not exist, do NOT try to create them or simulate a full
+      install. Instead, enter external-runtime mode immediately: use the external
+      skill package for config, skip repo-local warmup steps, and record in hub
+      state that the workflow is driven externally.
+
+hub_contract:
+  required_fields:
+    - v
+    - task
+    - state
+    - prev
+    - entered
+    - overlay
+  recommended_fields:
+    - risk
+    - gh
+    - agents
+    - wt
+  phase_data:
+    description: >
+      All phase data (intake, research, planning, coding) is embedded directly
+      in state.yaml under the corresponding phase key. There are no external
+      refs/ files. See config/hub-contract.md for the full format
+      specification.

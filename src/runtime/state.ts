@@ -30,11 +30,18 @@ export interface RuntimePaths {
   localAvicennaRoot: string;
   localStateRoot: string;
   localHubRoot: string;
-  localTasksRoot: string;
+  localDraftRoot: string;
   localArchiveRoot: string;
+  localTasksRoot: string;
   agentRoot: string;
   agentProjectRoot: string;
   agentArchiveRoot: string;
+  agentSkillsRoot: string;
+  agentAgentsRoot: string;
+  agentScriptsRoot: string;
+  agentConfigRoot: string;
+  agentBootstrapRoot: string;
+  agentExtensionsRoot: string;
 }
 
 export interface RuntimeManifest extends RuntimePaths {

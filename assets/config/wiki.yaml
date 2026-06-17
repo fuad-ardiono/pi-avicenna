@@ -1,0 +1,5 @@
+wiki:
+  root: "/Users/fuadardiono/.pi-avicenna/wiki"
+  project: ".agents"
+  auto_ingest: true
+  draft_ttl: 2

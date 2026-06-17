@@ -4,6 +4,7 @@ import { archiveTargetPaths, mirrorArchiveRecord } from './archive.js';
 import { createPiCrewHooks, type PiCrewAdapter } from './pi-crew.js';
 import { advanceFixRetestStage, advanceQaStage, type QaOutcome } from './qa-loop.js';
 import { captureTask } from './task-capture.js';
+import { renderManifestMarkdown, writeMarkdown } from './markdown.js';
 import {
   type ArchiveRecord,
   type PiAvicennaTask,
@@ -11,7 +12,6 @@ import {
   type TaskStatus,
   type WorkflowEvent,
   type WorkflowStage,
-  writeJsonFile,
 } from './state.js';
 
 export interface WorkflowTaskIntake {
@@ -98,11 +98,11 @@ function eventForOutcome(outcome: QaOutcome): WorkflowEvent['kind'] {
 export function createWorkflowHarness(options: { manifest: RuntimeManifest; adapter?: PiCrewAdapter }): WorkflowHarness {
   const hooks = createPiCrewHooks(options.adapter);
   let manifest: RuntimeManifest = { ...options.manifest };
-  const manifestPath = join(manifest.localStateRoot, 'manifest.json');
+  const manifestPath = join(manifest.localStateRoot, 'manifest.md');
   const capturedEvents: WorkflowEvent[] = [];
 
   async function persistManifest(): Promise<void> {
-    await writeJsonFile(manifestPath, manifest);
+    await writeMarkdown(manifestPath, renderManifestMarkdown(manifest));
   }
 
   async function persistStep(task: PiAvicennaTask, event: WorkflowEvent): Promise<WorkflowStepResult> {
@@ -110,7 +110,7 @@ export function createWorkflowHarness(options: { manifest: RuntimeManifest; adap
     manifest = { ...manifest, currentTaskId: task.id };
 
     await Promise.all([
-      captureTask(manifest.localStateRoot, manifest.localTasksRoot, { task, event }),
+      captureTask(manifest.localStateRoot, manifest.localHubRoot, manifest.localDraftRoot, { task, event }),
       persistManifest(),
     ]);
 

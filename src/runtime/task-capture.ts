@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { appendJsonLine, writeJsonFile } from './state.js';
+import { renderTaskMarkdown, writeMarkdown } from './markdown.js';
 import type { PiAvicennaTask, WorkflowEvent } from './state.js';
 
 export interface TaskCaptureEnvelope {
@@ -7,16 +7,27 @@ export interface TaskCaptureEnvelope {
   event: WorkflowEvent;
 }
 
-export async function captureTask(stateRoot: string, tasksRoot: string, envelope: TaskCaptureEnvelope): Promise<void> {
-  const currentTaskPath = join(stateRoot, 'current-task.json');
-  const stateEventLogPath = join(stateRoot, 'events.jsonl');
-  const taskCurrentPath = join(tasksRoot, 'current-task.json');
-  const eventPath = join(tasksRoot, 'events', `${envelope.event.id}.json`);
+export async function captureTask(
+  stateRoot: string,
+  hubRoot: string,
+  draftRoot: string,
+  envelope: TaskCaptureEnvelope,
+): Promise<void> {
+  const currentTaskPath = join(stateRoot, 'current-task.md');
+  const hubTaskPath = join(hubRoot, 'current-task.md');
+  const draftTaskPath = join(draftRoot, 'current-task.md');
+  const content = [
+    renderTaskMarkdown(envelope.task),
+    '',
+    '## Latest event',
+    `- **Event**: ${envelope.event.kind}`,
+    `- **Event ID**: ${envelope.event.id}`,
+    `- **Occurred**: ${envelope.event.occurredAt}`,
+  ].join('\n');
 
   await Promise.all([
-    writeJsonFile(currentTaskPath, envelope.task),
-    writeJsonFile(taskCurrentPath, envelope.task),
-    appendJsonLine(stateEventLogPath, envelope.event),
-    writeJsonFile(eventPath, envelope.event),
+    writeMarkdown(currentTaskPath, content),
+    writeMarkdown(hubTaskPath, content),
+    writeMarkdown(draftTaskPath, content),
   ]);
 }

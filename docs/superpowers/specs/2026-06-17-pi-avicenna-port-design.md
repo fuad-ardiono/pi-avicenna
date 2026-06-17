@@ -8,7 +8,7 @@ Port `mothershipv2` concepts into `pi-avicenna` as a Pi-native workflow harness 
 - Keep project directories clean.
   - Repo-local state lives only in `./.avicenna/`.
   - `./.avicenna/` is gitignored.
-- Core engine assets live in `~/.aviceena-agent`.
+- Core engine assets live in `~/.avicenna-agent`.
   - skills
   - scripts
   - config
@@ -22,7 +22,7 @@ Port `mothershipv2` concepts into `pi-avicenna` as a Pi-native workflow harness 
   - `pr_monkey`
   - `qa`
 - Integrate with pi-crew when performing coding or QA work.
-- Auto-bootstrap and auto-update `~/.aviceena-agent` on Pi plugin install/update.
+- Auto-bootstrap and auto-update `~/.avicenna-agent` on Pi plugin install/update.
 - Use Pi-native conventions, not mothershipv2 file formats.
 - Preserve the lifecycle semantics:
   - capture → active → archive
@@ -37,15 +37,15 @@ Port `mothershipv2` concepts into `pi-avicenna` as a Pi-native workflow harness 
 - Automatic task capture from workflow events.
 - Archive tasks to both locations:
   - `./.avicenna/archive`
-  - `~/.aviceena-agent/project/{repo-name}/archive`
+  - `~/.avicenna-agent/project/{repo-name}/archive`
 
 ## Architecture
 
 ### 1. Pi Plugin Layer
-The plugin is the user-facing entrypoint inside Pi. It triggers the workflow, surfaces current task state, and delegates all engine behavior to the user-level install under `~/.aviceena-agent`.
+The plugin is the user-facing entrypoint inside Pi. It triggers the workflow, surfaces current task state, and delegates all engine behavior to the user-level install under `~/.avicenna-agent`.
 
 ### 2. User-Level Engine
-`~/.aviceena-agent` is the durable runtime and knowledge layer. It stores:
+`~/.avicenna-agent` is the durable runtime and knowledge layer. It stores:
 - shared config
 - reusable skills and scripts
 - bootstrap/update logic
@@ -98,13 +98,13 @@ The plugin is the user-facing entrypoint inside Pi. It triggers the workflow, su
 - Do not add extra repo root folders beyond `.avicenna/`.
 
 ## Risks
-- Bootstrap/update drift between plugin code and `~/.aviceena-agent`.
+- Bootstrap/update drift between plugin code and `~/.avicenna-agent`.
 - Archive mirroring inconsistencies if one path fails.
 - QA loop complexity if state transitions are not strictly controlled.
 - Pi plugin installation constraints may require careful separation between repo-local state and user-level runtime assets.
 
 ## Verification
-- Plugin installs and updates `~/.aviceena-agent` automatically.
+- Plugin installs and updates `~/.avicenna-agent` automatically.
 - Workflow runs inside Pi.
 - Repo remains clean except for gitignored `.avicenna/`.
 - Task capture happens automatically.
@@ -116,6 +116,6 @@ The plugin is the user-facing entrypoint inside Pi. It triggers the workflow, su
 ## Acceptance Criteria
 - A new task can move from intake to completion entirely inside Pi.
 - The repo contains only `.avicenna/` for local state.
-- `~/.aviceena-agent` contains the engine and config.
+- `~/.avicenna-agent` contains the engine and config.
 - Archived tasks are mirrored in both archive locations.
 - The workflow supports QA failures and fixes before completion.
