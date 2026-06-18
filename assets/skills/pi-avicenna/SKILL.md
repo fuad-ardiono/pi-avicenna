@@ -26,10 +26,10 @@ Run this checklist immediately when `pi-avicenna` is invoked:
 5. Ensure the package provides `assets/agents/registry.yaml` and `assets/skills/pi-avicenna/subagent-protocol.md`.
 6. If project-local `config/model-policy.yaml` is missing, use the bundled `assets/config/model-policy.yaml` defaults or run `assets/skills/model-policy-setup/scripts/setup-model-policy.sh` to bootstrap a project-local copy. Inform the user they should edit the `host_models` section to match their available models.
 7. If preflight fails, record a `blocked` overlay or explicit fallback notes before continuing.
-8. If `.avicenna/wiki.yaml` exists, read `projects/<name>/index.md` from the configured wiki root for project context.
+8. If `.avicenna/wiki.yaml` exists, read `projects/<name>/index.md` from the configured wiki root for project context. If wiki is empty (fresh project), note it briefly and continue — do not treat it as an error.
 9. **If wiki is configured, apply the Retrieval Protocol**: extract task keywords, search project index for matching categories/tags, read up to 5 relevant wiki pages. Do not read the full wiki.
 10. **If wiki is configured, check freshness metadata** on each wiki page read. Flag pages older than 90 days as stale and record their page paths in top-level hub state under `wiki.stale_pages`.
-11. On pi: verify the `pi_avicenna_spawn` tool is available after `pi install` and `/reload`. If absent, delegation will not work — record a `blocked` overlay and continue without sub-agent spawning.
+11. On pi: the `pi_avicenna_spawn` tool is registered automatically by the pi-avicenna extension on `pi install`. It is a Pi runtime tool, not a shell command — do not attempt to verify it via bash. If the extension loaded successfully (no error in `/reload`), the tool is available. Only record a `blocked` overlay if the extension explicitly failed to load.
 
 ## Pi Setup Prerequisites
 
