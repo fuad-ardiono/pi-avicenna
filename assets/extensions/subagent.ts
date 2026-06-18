@@ -37,9 +37,9 @@ function getBundledAssetPath(...segments: string[]): string | undefined {
 	return fs.existsSync(candidate) ? candidate : undefined;
 }
 
-/** Resolve PI_HOME: env var or default ~/.avicenna-agent */
+/** Resolve PI_HOME: env var or default ~/.agents (pi convention) */
 function getPiHome(): string {
-	return process.env.PI_HOME || path.join(os.homedir(), ".avicenna-agent");
+	return process.env.PI_HOME || path.join(os.homedir(), ".agents");
 }
 
 /**
@@ -478,6 +478,26 @@ async function runPiSubprocess(
 }
 
 export default function (pi: ExtensionAPI) {
+	// Run warmup (seeds bundled skills to PI_HOME, validates model policy, etc.)
+	// on every session start so dependencies are always available.
+	pi.on("session_start", async (_event, _ctx) => {
+		const warmupScript = getBundledAssetPath("skills", "pi-avicenna", "scripts", "warmup.sh");
+		if (warmupScript && fs.existsSync(warmupScript)) {
+			try {
+				const { execFile } = await import("node:child_process");
+				const { promisify } = await import("node:util");
+				const execFileAsync = promisify(execFile);
+				await execFileAsync("bash", [warmupScript], {
+					env: { ...process.env, PI_HOME: getPiHome() },
+					timeout: 30_000,
+				});
+			} catch (e: any) {
+				// Warmup failure is non-fatal — log and continue
+				console.warn(`[pi-avicenna] warmup failed: ${e?.message || e}`);
+			}
+		}
+	});
+
 	pi.registerCommand("pi-avicenna", {
 		description: "Start the Pi Avicenna orchestration workflow.",
 		handler: async (args) => {

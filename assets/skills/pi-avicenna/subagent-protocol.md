@@ -191,9 +191,9 @@ Commander waits for completion before transitioning.
 
 **Requirements:**
 - The `pi_avicenna_spawn` runtime extension files must be installed under
-  `$PI_HOME/extensions/` (default `~/.avicenna-agent/extensions/`):
+  `$PI_HOME/extensions/` (default `~/.agents/extensions/`):
   `subagent.ts` and `pi-routing.js`. See `skills/pi-avicenna/SKILL.md` warmup checklist.
-- The install target for Pi is `~/.avicenna-agent` (not `~/.codex` or `~/.pi`) to avoid
+- The install target for Pi is `~/.agents` (not `~/.codex` or `~/.pi`) to avoid
   conflicts with other agent hosts. Set the `PI_HOME` environment variable to
   override.
 - **Required prerequisite:** `pi install npm:pi-crew`

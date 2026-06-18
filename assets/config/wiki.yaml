@@ -1,5 +1,5 @@
 wiki:
-  root: "~/.avicenna-agent/wiki"
-  project: ".avicenna-agent"
+  root: "~/.agents/wiki"
+  project: ".agents"
   auto_ingest: true
   draft_ttl: 2

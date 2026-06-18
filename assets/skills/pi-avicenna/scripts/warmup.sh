@@ -19,7 +19,7 @@ model_policy_file="${repo_root}/.avicenna/model-policy.yaml"
 legacy_model_policy_file="${repo_root}/config/model-policy.yaml"
 model_policy_validator="${repo_root}/skills/pi-avicenna/scripts/validate-model-policy.sh"
 
-PI_HOME="${PI_HOME:-${HOME}/.avicenna-agent}"
+PI_HOME="${PI_HOME:-${HOME}/.agents}"
 
 mkdir -p "${runtime_dir}" "${preflight_dir}" "${runtime_dir}/sessions" "${hub_dir}"
 
@@ -33,14 +33,38 @@ required_skills=(
   "obra/systematical-debugging"
 )
 
-# Search root for skill SKILL.md files: home install only.
-# ensureHomeInstall seeds all bundled skills (including obra) to PI_HOME/skills/.
+# Search root for skill SKILL.md files: PI_HOME/skills only.
+# Required skills are seeded there from the bundled repo (see below).
+# Do NOT include repo_root/skills — pi already discovers those via pi.skills
+# in package.json, and including them causes collision warnings.
 search_roots=(
   "${PI_HOME}/skills"
 )
 
 if [ -n "${PI_AVICENNA_SKILLS_HOME:-}" ]; then
   search_roots=("${PI_AVICENNA_SKILLS_HOME}")
+fi
+
+# ==== Seed required skills to PI_HOME ====
+# Only seed the skills listed in required_skills (the obra/* dependencies).
+# Other skills (commit, create-pr, etc.) are already installed by pi's
+# package discovery via pi.skills in package.json — copying them too causes
+# collision warnings. This runs on every warmup; existing files are
+# overwritten only if the repo copy is newer (uses cp -u when available).
+bundled_skills_dir="${repo_root}/skills"
+if [ -d "${bundled_skills_dir}" ]; then
+  mkdir -p "${PI_HOME}/skills"
+  for skill in "${required_skills[@]}"; do
+    src_dir="${bundled_skills_dir}/${skill}"
+    [ -d "${src_dir}" ] || continue
+    target_dir="${PI_HOME}/skills/${skill}"
+    mkdir -p "${target_dir}"
+    if cp -u -r "${src_dir}/." "${target_dir}/" 2>/dev/null; then
+      : # updated copy succeeded
+    else
+      cp -r "${src_dir}/." "${target_dir}/" 2>/dev/null || true
+    fi
+  done
 fi
 
 {

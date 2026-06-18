@@ -7,7 +7,7 @@ description: Configure the pi-avicenna wiki for the current project. Run once pe
 
 ## What It Does
 
-1. Prompts for wiki root location (default: `~/.avicenna-agent/wiki/`)
+1. Prompts for wiki root location (default: `~/.agents/wiki/`)
 2. Derives project name from repository directory
 3. Creates wiki directory structure under `<wiki-root>/projects/<name>/`
 4. Writes preferences to `.avicenna/wiki.yaml`
@@ -29,7 +29,7 @@ Stored in `.avicenna/wiki.yaml`:
 
 ```yaml
 wiki:
-  root: ~/.avicenna-agent/wiki/
+  root: ~/.agents/wiki/
   project: project-name
   auto_ingest: true
   draft_ttl: 2

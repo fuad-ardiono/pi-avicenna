@@ -37,9 +37,9 @@ function getBundledAssetPath(...segments: string[]): string | undefined {
 	return fs.existsSync(candidate) ? candidate : undefined;
 }
 
-/** Resolve PI_HOME: env var or default ~/.avicenna-agent */
+/** Resolve PI_HOME: env var or default ~/.agents (pi convention) */
 function getPiHome(): string {
-	return process.env.PI_HOME || path.join(os.homedir(), ".avicenna-agent");
+	return process.env.PI_HOME || path.join(os.homedir(), ".agents");
 }
 
 /**
