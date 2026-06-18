@@ -45,25 +45,38 @@ if [ -n "${PI_AVICENNA_SKILLS_HOME:-}" ]; then
   search_roots=("${PI_AVICENNA_SKILLS_HOME}")
 fi
 
-# ==== Seed required skills to PI_HOME ====
-# Only seed the skills listed in required_skills (the obra/* dependencies).
-# Other skills (commit, create-pr, etc.) are already installed by pi's
-# package discovery via pi.skills in package.json — copying them too causes
-# collision warnings. This runs on every warmup; existing files are
-# overwritten only if the repo copy is newer (uses cp -u when available).
+# ==== Seed package assets to PI_HOME ====
+# When this plugin is installed via `pi install`, warmup.sh runs from
+# PI_HOME/skills/pi-avicenna/scripts/warmup.sh, so ../../.. = PI_HOME.
+# Seed agents/, config/, and required skills so all paths resolve correctly.
+# Do NOT seed top-level skills (commit, create-pr, etc.) — pi discovers those
+# via pi.skills in package.json and seeding them causes collision warnings.
+
+seed_dir() {
+  local src="$1" dest="$2"
+  [ -d "${src}" ] || return 0
+  mkdir -p "${dest}"
+  if cp -u -r "${src}/." "${dest}/" 2>/dev/null; then
+    : # updated copy succeeded
+  else
+    cp -r "${src}/." "${dest}/" 2>/dev/null || true
+  fi
+}
+
+# Seed agents/ (registry.yaml + role contracts)
+seed_dir "${repo_root}/agents" "${PI_HOME}/agents"
+
+# Seed config/ (model-policy, wiki.yaml, hub-contract, skill-dependencies)
+seed_dir "${repo_root}/config" "${PI_HOME}/config"
+
+# Seed required obra/* skills only (not all skills — avoids collisions)
 bundled_skills_dir="${repo_root}/skills"
 if [ -d "${bundled_skills_dir}" ]; then
   mkdir -p "${PI_HOME}/skills"
   for skill in "${required_skills[@]}"; do
     src_dir="${bundled_skills_dir}/${skill}"
     [ -d "${src_dir}" ] || continue
-    target_dir="${PI_HOME}/skills/${skill}"
-    mkdir -p "${target_dir}"
-    if cp -u -r "${src_dir}/." "${target_dir}/" 2>/dev/null; then
-      : # updated copy succeeded
-    else
-      cp -r "${src_dir}/." "${target_dir}/" 2>/dev/null || true
-    fi
+    seed_dir "${src_dir}" "${PI_HOME}/skills/${skill}"
   done
 fi
 
