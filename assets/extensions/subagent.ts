@@ -7,20 +7,32 @@
  * Contract & registry resolution order:
  *   1. Explicit param (contract_file / registry_path)
  *   2. Repo-local <cwd>/agents/<file>
- *   3. User-scope  $PI_HOME/agents/<file>
+ *   3. Bundled package assets <package>/assets/agents/<file>
+ *   4. User-scope  $PI_HOME/agents/<file>
  */
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { Message } from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import { fileURLToPath } from "node:url";
+import type { Message } from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { buildTeamInvocation, decidePiRoute } from "./pi-routing.js";
 
 const VALID_ROLES = new Set(["researcher", "coder", "qa", "pr_monkey"]);
+const extensionDir = path.dirname(fileURLToPath(import.meta.url));
+const bundledAssetsRoot = path.basename(extensionDir) === "extensions"
+	? path.dirname(extensionDir)
+	: undefined;
+
+function getBundledAssetPath(...segments: string[]): string | undefined {
+	if (!bundledAssetsRoot) return undefined;
+	const candidate = path.join(bundledAssetsRoot, ...segments);
+	return fs.existsSync(candidate) ? candidate : undefined;
+}
 
 /** Resolve PI_HOME: env var or default ~/.agents */
 function getPiHome(): string {
@@ -29,13 +41,13 @@ function getPiHome(): string {
 
 /**
  * Resolve a contract file path.
- * Order: explicit param → repo-local → user-scope ($PI_HOME/agents/)
+ * Order: explicit param → repo-local → bundled package assets → user-scope ($PI_HOME/agents/)
  */
 function resolveContractFile(
 	role: string,
 	explicitPath: string | undefined,
 	cwd: string,
-): { path: string; source: "explicit" | "repo-local" | "user-scope"; triedPaths: string[] } {
+): { path: string; source: "explicit" | "repo-local" | "bundled" | "user-scope"; triedPaths: string[] } {
 	const triedPaths: string[] = [];
 
 	// 1. Explicit param
@@ -53,7 +65,14 @@ function resolveContractFile(
 		return { path: repoPath, source: "repo-local", triedPaths };
 	}
 
-	// 3. User-scope
+	// 3. Bundled package assets (normal `pi install` layout)
+	const bundledPath = getBundledAssetPath("agents", `${role}.md`);
+	if (bundledPath) {
+		triedPaths.push(`bundled: ${bundledPath}`);
+		return { path: bundledPath, source: "bundled", triedPaths };
+	}
+
+	// 4. User-scope
 	const piHome = getPiHome();
 	const userPath = path.join(piHome, "agents", `${role}.md`);
 	triedPaths.push(`user-scope: ${userPath}`);
@@ -66,16 +85,18 @@ function resolveContractFile(
 
 /**
  * Resolve registry.yaml path.
- * Order: repo-local → user-scope ($PI_HOME/agents/)
+ * Order: repo-local → bundled package assets → user-scope ($PI_HOME/agents/)
  */
 function resolveRegistryPath(cwd: string): string {
 	const repoLocal = path.join(cwd, "agents", "registry.yaml");
 	if (fs.existsSync(repoLocal)) return repoLocal;
+	const bundledPath = getBundledAssetPath("agents", "registry.yaml");
+	if (bundledPath) return bundledPath;
 	const piHome = getPiHome();
 	return path.join(piHome, "agents", "registry.yaml");
 }
 
-interface Pi AvicennaSpawnResult {
+interface PiAvicennaSpawnResult {
 	role: string;
 	output: string;
 	usage: {
@@ -230,8 +251,8 @@ async function runPiSubprocess(
 	cwd: string,
 	signal: AbortSignal | undefined,
 	role: string,
-): Promise<Pi AvicennaSpawnResult> {
-	const result: Pi AvicennaSpawnResult = {
+): Promise<PiAvicennaSpawnResult> {
+	const result: PiAvicennaSpawnResult = {
 		role,
 		output: "",
 		usage: { inputTokens: 0, outputTokens: 0, costTotal: 0, turns: 0 },
@@ -344,6 +365,14 @@ async function runPiSubprocess(
 }
 
 export default function (pi: ExtensionAPI) {
+	pi.registerCommand("pi-avicenna", {
+		description: "Start the Pi Avicenna orchestration workflow.",
+		handler: async (args) => {
+			const suffix = args?.trim() ? `\n\n${args.trim()}` : "";
+			pi.sendUserMessage(`/skill:pi-avicenna${suffix}`, { deliverAs: "followUp" });
+		},
+	});
+
 	pi.registerTool({
 		name: "pi_avicenna_spawn",
 		label: "Pi Avicenna Spawn",
@@ -449,8 +478,13 @@ export default function (pi: ExtensionAPI) {
 
 				// --- Model policy resolution: load model-policy.yaml when registry model_hint is empty ---
 				if (route.path === "team" && !route.modelHint) {
-					const policyPath = path.join(cwd, "config", "model-policy.yaml");
-					if (fs.existsSync(policyPath)) {
+					const policyCandidates = [
+						path.join(cwd, "config", "model-policy.yaml"),
+						getBundledAssetPath("config", "model-policy.yaml"),
+						path.join(getPiHome(), "config", "model-policy.yaml"),
+					].filter((candidate): candidate is string => Boolean(candidate));
+					const policyPath = policyCandidates.find((candidate) => fs.existsSync(candidate));
+					if (policyPath) {
 						try {
 							const policyContent = fs.readFileSync(policyPath, "utf8");
 							const roleTier = extractYamlValue(policyContent, "role_tiers", role);

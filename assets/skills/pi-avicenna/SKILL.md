@@ -11,32 +11,32 @@ Use it only when the user intentionally wants to activate pi-avicenna
 orchestration. Do not assume this package should take over automatically just
 because it is installed.
 
-This skill expects the full pi-avicenna package layout to be installed so it can
-read `agents/`, `config/`, `.pi-avicenna/hub/`, and the supporting workflow docs.
+This skill expects the pi-avicenna Pi package to be installed. Package assets live
+inside the installed package under `assets/` (for example `assets/agents/` and
+`assets/config/`), while project runtime state lives under `.pi-avicenna/`.
 
 ## Startup Warm-Up Checklist
 
 Run this checklist immediately when `pi-avicenna` is invoked:
 
-1. Run `skills/pi-avicenna/scripts/warmup.sh` from repository root.
+1. Run the package warmup script if available: `assets/skills/pi-avicenna/scripts/warmup.sh` from the installed package root, or `skills/pi-avicenna/scripts/warmup.sh` in a copied legacy install.
 2. Ensure runtime artifacts are dot-prefixed under `.pi-avicenna/`.
 3. Confirm the repository already ignores `.pi-avicenna/`; warmup must not edit `.gitignore`.
-4. Ensure required auxiliary skills are available per `config/skill-dependencies.md`.
-5. Ensure `agents/registry.yaml` and `skills/pi-avicenna/subagent-protocol.md` are available.
-6. If `config/model-policy.yaml` is missing, run `skills/model-policy-setup/scripts/setup-model-policy.sh` to bootstrap it. Inform the user they should edit the `host_models` section to match their available models.
+4. Ensure required auxiliary skills are available per `assets/config/skill-dependencies.md`.
+5. Ensure the package provides `assets/agents/registry.yaml` and `assets/skills/pi-avicenna/subagent-protocol.md`.
+6. If project-local `config/model-policy.yaml` is missing, use the bundled `assets/config/model-policy.yaml` defaults or run `assets/skills/model-policy-setup/scripts/setup-model-policy.sh` to bootstrap a project-local copy. Inform the user they should edit the `host_models` section to match their available models.
 7. If preflight fails, record a `blocked` overlay or explicit fallback notes before continuing.
 8. If `.pi-avicenna/wiki.yaml` exists, read `projects/<name>/index.md` from the configured wiki root for project context.
 9. **If wiki is configured, apply the Retrieval Protocol**: extract task keywords, search project index for matching categories/tags, read up to 5 relevant wiki pages. Do not read the full wiki.
 10. **If wiki is configured, check freshness metadata** on each wiki page read. Flag pages older than 90 days as stale and record their page paths in top-level hub state under `wiki.stale_pages`.
-11. On pi: verify the `pi_avicenna_spawn` extension is available under `$PI_HOME/extensions/` (default `~/.agents/extensions/`). If absent, delegation will not work — record a `blocked` overlay and continue without sub-agent spawning.
+11. On pi: verify the `pi_avicenna_spawn` tool is available after `pi install` and `/reload`. If absent, delegation will not work — record a `blocked` overlay and continue without sub-agent spawning.
 
 ## Pi Setup Prerequisites
 
 Before using pi-avicenna with Pi, ensure the following prerequisites are met:
 
-1. **Install target is `~/.agents`.** The canonical Pi install root is `~/.agents` to
-   avoid conflicts with Codex (which uses `~/.codex`). The installer sets
-   `PI_HOME=~/.agents` so Pi resolves extensions from `$PI_HOME/extensions/`.
+1. **Install as a Pi package.** Pi discovers this package through the `pi` manifest
+   in `package.json`; no separate copy installer is required.
 
 2. **Install pi-crew.** Pi Avicenna team-first routing requires pi-crew:
    ```bash
@@ -49,19 +49,20 @@ Before using pi-avicenna with Pi, ensure the following prerequisites are met:
    pi-crew pi install npm:@juicesharp/rpiv-todo
    ```
 
-4. **Run the pi-avicenna installer for Pi:**
+4. **Install pi-avicenna from this package:**
    ```bash
-   ./install.sh --target pi --mode copy
+   pi install /absolute/path/to/pi-avicenna
+   # or, from this repository:
+   pi install .
    ```
-   This copies skills, agents, config, and the `pi_avicenna_spawn` extension to
-   `$PI_HOME/` (default `~/.agents/`).
+   For a one-off test without changing settings, run:
+   ```bash
+   pi -e /absolute/path/to/pi-avicenna
+   ```
 
-5. **Verify the extension resolves:**
-   ```bash
-   ls $PI_HOME/extensions/subagent.ts
-   ls $PI_HOME/extensions/pi-routing.js
-   ```
-   If the file is absent, delegation will not work.
+5. **Verify the extension resolves:** start Pi, run `/reload`, then ask for the
+   `pi_avicenna_spawn` tool or invoke `/skill:pi-avicenna`. If the tool is absent,
+   delegation will not work.
 
 6. **Secure config guidance:** Do not commit secrets or API keys to agent config
    files. Use user-scope config only (`$PI_HOME/` is user-local).
