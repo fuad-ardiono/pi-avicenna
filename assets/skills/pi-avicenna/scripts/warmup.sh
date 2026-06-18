@@ -45,12 +45,12 @@ if [ -n "${PI_AVICENNA_SKILLS_HOME:-}" ]; then
   search_roots=("${PI_AVICENNA_SKILLS_HOME}")
 fi
 
-# ==== Seed package assets to PI_HOME ====
+# ==== Seed all package assets to PI_HOME ====
 # When this plugin is installed via `pi install`, warmup.sh runs from
 # PI_HOME/skills/pi-avicenna/scripts/warmup.sh, so ../../.. = PI_HOME.
-# Seed agents/, config/, and required skills so all paths resolve correctly.
-# Do NOT seed top-level skills (commit, create-pr, etc.) — pi discovers those
-# via pi.skills in package.json and seeding them causes collision warnings.
+# Seed agents/, config/, and ALL skills so every path resolves correctly.
+# Collision warnings from pi are benign (same content, already installed)
+# and can be safely ignored.
 
 seed_dir() {
   local src="$1" dest="$2"
@@ -69,14 +69,23 @@ seed_dir "${repo_root}/agents" "${PI_HOME}/agents"
 # Seed config/ (model-policy, wiki.yaml, hub-contract, skill-dependencies)
 seed_dir "${repo_root}/config" "${PI_HOME}/config"
 
-# Seed required obra/* skills only (not all skills — avoids collisions)
+# Seed ALL skills (including obra/*, pi-avicenna, commit, etc.)
+# Collision warnings are expected and benign — same content already installed.
 bundled_skills_dir="${repo_root}/skills"
 if [ -d "${bundled_skills_dir}" ]; then
-  mkdir -p "${PI_HOME}/skills"
-  for skill in "${required_skills[@]}"; do
-    src_dir="${bundled_skills_dir}/${skill}"
-    [ -d "${src_dir}" ] || continue
-    seed_dir "${src_dir}" "${PI_HOME}/skills/${skill}"
+  for skill_dir in "${bundled_skills_dir}"/*/; do
+    [ -d "${skill_dir}" ] || continue
+    skill_name="$(basename "${skill_dir}")"
+    # For nested skill groups (e.g. obra/), recurse into subdirs
+    if [ ! -f "${skill_dir}/SKILL.md" ]; then
+      for sub_dir in "${skill_dir}"*/; do
+        [ -d "${sub_dir}" ] || continue
+        sub_name="$(basename "${sub_dir}")"
+        seed_dir "${sub_dir}" "${PI_HOME}/skills/${skill_name}/${sub_name}"
+      done
+    else
+      seed_dir "${skill_dir}" "${PI_HOME}/skills/${skill_name}"
+    fi
   done
 fi
 
