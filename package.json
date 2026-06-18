@@ -33,6 +33,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit",
+    "pack": "npm pack --dry-run",
     "prepare": "npm run build"
   },
   "peerDependencies": {

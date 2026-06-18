@@ -255,6 +255,15 @@ function envTimeoutMs(name: string, fallback: number): number {
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function buildRoleContract(role: string, contractPath: string, source: string): Record<string, string> {
+	return {
+		role,
+		path: contractPath,
+		source,
+		content: fs.readFileSync(contractPath, "utf8"),
+	};
+}
+
 function timeoutError(message: string): Error {
 	const err = new Error(message);
 	err.name = "TimeoutError";
@@ -283,12 +292,15 @@ async function withTimeout<T>(
 	}
 }
 
+type SpawnProgress = (message: string, details?: Record<string, any>) => void;
+
 async function runPiSubprocess(
 	contractPath: string,
 	task: string,
 	cwd: string,
 	signal: AbortSignal | undefined,
 	role: string,
+	progress?: SpawnProgress,
 ): Promise<PiAvicennaSpawnResult> {
 	const result: PiAvicennaSpawnResult = {
 		role,
@@ -309,6 +321,8 @@ async function runPiSubprocess(
 	args.push("--append-system-prompt", contractContent);
 	args.push(`Task: ${task}`);
 
+	progress?.("Starting legacy pi subprocess fallback", { phase: "legacy_start", contract_path: contractPath, cwd });
+
 	let wasAborted = false;
 	let timeoutMessage: string | undefined;
 	let stderrBuffer = "";
@@ -328,12 +342,15 @@ async function runPiSubprocess(
 			shell: false,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
+		progress?.("Legacy pi subprocess spawned", { phase: "legacy_spawned", pid: proc.pid });
 
 		let stdoutBuffer = "";
+		let lastOutputUpdate = 0;
 
 		const terminate = (message: string) => {
 			if (settled || timeoutMessage) return;
 			timeoutMessage = message;
+			progress?.(message, { phase: "legacy_terminating", pid: proc.pid });
 			proc.kill("SIGTERM");
 			sigkillTimer = setTimeout(() => {
 				if (!settled) proc.kill("SIGKILL");
@@ -359,6 +376,14 @@ async function runPiSubprocess(
 				event = JSON.parse(line);
 			} catch {
 				return;
+			}
+
+			if (event.type) {
+				const now = Date.now();
+				if (now - lastOutputUpdate > 2000 || event.type === "message_end") {
+					lastOutputUpdate = now;
+					progress?.(`Legacy pi event: ${event.type}`, { phase: "legacy_event", event_type: event.type, pid: proc.pid });
+				}
 			}
 
 			if (event.type === "message_end" && event.message) {
@@ -394,6 +419,11 @@ async function runPiSubprocess(
 		proc.stderr.on("data", (data) => {
 			refreshIdleTimer();
 			stderrBuffer += data.toString();
+			const now = Date.now();
+			if (now - lastOutputUpdate > 2000) {
+				lastOutputUpdate = now;
+				progress?.("Legacy pi subprocess produced stderr output", { phase: "legacy_stderr", pid: proc.pid });
+			}
 		});
 
 		const cleanup = () => {
@@ -407,11 +437,13 @@ async function runPiSubprocess(
 		proc.on("close", (code) => {
 			cleanup();
 			if (stdoutBuffer.trim()) processLine(stdoutBuffer);
+			progress?.("Legacy pi subprocess closed", { phase: "legacy_closed", pid: proc.pid, exit_code: code ?? 0 });
 			resolve(code ?? 0);
 		});
 
-		proc.on("error", () => {
+		proc.on("error", (err) => {
 			cleanup();
+			progress?.(`Legacy pi subprocess error: ${err.message}`, { phase: "legacy_error", pid: proc.pid });
 			resolve(1);
 		});
 
@@ -437,6 +469,11 @@ async function runPiSubprocess(
 		result.error = `Sub-process exited with code ${exitCode}${stderr ? `: ${stderr}` : ""}`;
 	}
 
+	progress?.(result.error ? `Legacy pi subprocess finished with error: ${result.error}` : "Legacy pi subprocess completed", {
+		phase: result.error ? "legacy_finished_error" : "legacy_finished",
+		turns: result.usage.turns,
+		model: result.usage.model,
+	});
 	return result;
 }
 
@@ -488,10 +525,27 @@ export default function (pi: ExtensionAPI) {
 			),
 		}),
 
-		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const role = params.role;
 			const task = params.task ?? "";
 			const cwd = params.cwd ?? ctx.cwd;
+			const startedAt = Date.now();
+			const progressLines: string[] = [];
+			const emitProgress: SpawnProgress = (message, details = {}) => {
+				const timestamp = new Date().toISOString();
+				progressLines.push(`${timestamp} ${message}`);
+				if (progressLines.length > 80) progressLines.splice(0, progressLines.length - 80);
+				onUpdate?.({
+					content: [{ type: "text", text: progressLines.join("\n") }],
+					details: {
+						role,
+						elapsed_ms: Date.now() - startedAt,
+						...details,
+					},
+				});
+			};
+
+			emitProgress("pi_avicenna_spawn started", { phase: "start", cwd, task_preview: task.slice(0, 120) });
 
 			// Validate role before any work
 			if (!VALID_ROLES.has(role)) {
@@ -510,6 +564,11 @@ export default function (pi: ExtensionAPI) {
 			// --- Bug 1 fix: Resolve contract file with user-scope fallback ---
 			const resolved = resolveContractFile(role, params.contract_file, cwd);
 			const contractFile = resolved.path;
+			emitProgress("Resolved role contract", {
+				phase: "contract_resolved",
+				contract_source: resolved.source,
+				contract_path: contractFile,
+			});
 
 			if (!fs.existsSync(contractFile)) {
 				const triedList = resolved.triedPaths.join("\n  - ");
@@ -534,6 +593,7 @@ export default function (pi: ExtensionAPI) {
 			try {
 				// --- Design Gap 3 fix: Read contract_file from registry as source of truth ---
 				const registryPath = params.registry_path || resolveRegistryPath(cwd);
+				emitProgress("Loading role registry", { phase: "registry_loading", registry_path: registryPath });
 				const roleConfig = parseRoleConfigFromRegistry(registryPath, role);
 
 				// If registry specifies a contract_file, prefer that as primary contract path
@@ -541,16 +601,26 @@ export default function (pi: ExtensionAPI) {
 				// the registry can point to whatever filename exists.
 				// Note: contract_file paths are relative to the repo root, not the registry directory.
 				let effectiveContractFile = contractFile;
+				let effectiveContractSource = resolved.source;
 				if (roleConfig.contract_file) {
 					const registryContractFile = path.isAbsolute(roleConfig.contract_file)
 						? roleConfig.contract_file
 						: path.resolve(cwd, roleConfig.contract_file);
 					if (fs.existsSync(registryContractFile)) {
 						effectiveContractFile = registryContractFile;
+						effectiveContractSource = "registry";
 					}
 				}
 
 				const route = decidePiRoute({ role, config: roleConfig, availableTools: getAvailableToolNames(ctx as any) });
+				emitProgress(`Selected delegation route: ${route.path}`, {
+					phase: "route_selected",
+					route: route.path,
+					team: route.teamName,
+					team_tool: route.teamTool,
+					reason: route.reason,
+					strict_team_mode: route.strictTeamMode,
+				});
 
 				// --- Model policy resolution: load model-policy.yaml when registry model_hint is empty ---
 				if (route.path === "team" && !route.modelHint) {
@@ -573,6 +643,7 @@ export default function (pi: ExtensionAPI) {
 							}
 						} catch (e) {
 							// Policy load failed — continue with empty model hint (legacy fallback)
+							emitProgress(`Model policy load failed: ${(e as Error).message}`, { phase: "model_policy_error" });
 							console.warn(`[pi_avicenna_spawn] model-policy load failed: ${(e as Error).message}`);
 						}
 					}
@@ -586,19 +657,53 @@ export default function (pi: ExtensionAPI) {
 				if (teamPathSafe) {
 					const callTool = (ctx as any)?.callTool || (ctx as any)?.executeTool || (pi as any)?.callTool;
 					if (typeof callTool !== "function") {
+						const reason = "team_tool_unavailable";
+						if (route.strictTeamMode) {
+							emitProgress("Team tool unavailable; strict team mode blocks legacy fallback", {
+								phase: "team_unavailable_strict",
+								route: "team",
+								team_tool: route.teamTool,
+								reason,
+								strict_team_mode: true,
+							});
+							return {
+								content: [{ type: "text", text: `pi_avicenna_spawn failed: ${reason} (strict team mode enabled)` }],
+								details: { role, route: "team", team_tool: route.teamTool, reason, strict_team_mode: true },
+								isError: true,
+							};
+						}
+						emitProgress("Team tool unavailable; falling back to legacy subprocess", {
+							phase: "team_unavailable",
+							route: "legacy",
+							team_tool: route.teamTool,
+							reason,
+							strict_team_mode: false,
+						});
 						console.warn(
-							`[pi_avicenna_spawn] fallback=legacy reason=team_tool_unavailable tool=${route.teamTool} role=${role}`,
+							`[pi_avicenna_spawn] fallback=legacy reason=${reason} tool=${route.teamTool} role=${role}`,
 						);
 						teamPathSafe = false;
 					}
 				}
 
 				if (teamPathSafe && route.path === "team") {
+					const roleContract = buildRoleContract(role, effectiveContractFile, effectiveContractSource);
 					const payload = buildTeamInvocation({
 						teamName: route.teamName,
 						task: enrichedTask,
 						modelHint: route.modelHint,
 						modelFallbackChain: route.modelFallbackChain,
+						roleContract,
+					});
+					emitProgress("Calling pi-crew team tool", {
+						phase: "team_call_start",
+						route: "team",
+						team: route.teamName,
+						team_tool: route.teamTool,
+						model_hint: route.modelHint,
+						contract_path: roleContract.path,
+						contract_source: roleContract.source,
+						strict_team_mode: route.strictTeamMode,
 					});
 					try {
 						const callTool =
@@ -616,14 +721,43 @@ export default function (pi: ExtensionAPI) {
 						).finally(() => {
 							signal?.removeEventListener("abort", abortTeam);
 						});
+						emitProgress("pi-crew team tool returned", {
+							phase: "team_call_returned",
+							route: "team",
+							is_error: Boolean(teamResult?.isError),
+						});
 						if (teamResult?.isError) {
 							const errText = Array.isArray(teamResult.content)
 								? teamResult.content.map((c: any) => c?.text || "").join(" ")
 								: "";
+							const reason = "team_tool_unhealthy";
 							const isExcludeTools =
 								errText.includes("--exclude-tools") || errText.includes("Unknown option");
+							if (route.strictTeamMode) {
+								emitProgress("pi-crew team returned an error; strict team mode blocks legacy fallback", {
+									phase: "team_error_strict",
+									route: "team",
+									team_tool: route.teamTool,
+									reason,
+									strict_team_mode: true,
+									error: errText,
+								});
+								return {
+									content: [{ type: "text", text: `pi_avicenna_spawn failed: ${reason} (strict team mode enabled)${errText ? `\n\n${errText}` : ""}` }],
+									details: { role, route: "team", team: route.teamName, team_tool: route.teamTool, reason, strict_team_mode: true, error: errText },
+									isError: true,
+								};
+							}
+							emitProgress("pi-crew team returned an error; falling back to legacy subprocess", {
+								phase: "team_error_fallback",
+								route: "legacy",
+								team_tool: route.teamTool,
+								reason,
+								strict_team_mode: false,
+								error: errText,
+							});
 							console.warn(
-								`[pi_avicenna_spawn] fallback=legacy reason=team_tool_unhealthy tool=${route.teamTool} role=${role}` +
+								`[pi_avicenna_spawn] fallback=legacy reason=${reason} tool=${route.teamTool} role=${role}` +
 									(isExcludeTools
 										? ` (detected: pi-crew CLI flag issue — check pi/pi-crew compatibility for ${knownUnsupportedFlags})`
 										: ""),
@@ -632,6 +766,11 @@ export default function (pi: ExtensionAPI) {
 							const output = Array.isArray(teamResult?.content)
 								? teamResult.content.map((c: any) => c?.text || "").join("\n").trim()
 								: "";
+							emitProgress("pi-crew team delegation completed", {
+								phase: "team_completed",
+								route: "team",
+								team: route.teamName,
+							});
 							return {
 								content: [{ type: "text", text: output || "(no output)" }],
 								details: {
@@ -639,38 +778,91 @@ export default function (pi: ExtensionAPI) {
 									route: "team",
 									team: route.teamName,
 									team_tool: route.teamTool,
-									contract_source: resolved.source,
+									contract_source: effectiveContractSource,
+									contract_path: roleContract.path,
 									model_hint: route.modelHint,
 									model_fallback_chain: route.modelFallbackChain,
+									strict_team_mode: route.strictTeamMode,
 								},
 							};
 						}
 					} catch (err: any) {
 						const errMsg = err?.message || "";
+						const reason = "team_tool_unhealthy";
 						const isExcludeTools =
 							errMsg.includes("--exclude-tools") || errMsg.includes("Unknown option");
+						if (route.strictTeamMode) {
+							emitProgress(`pi-crew team call failed; strict team mode blocks legacy fallback: ${errMsg || String(err)}`, {
+								phase: "team_exception_strict",
+								route: "team",
+								team_tool: route.teamTool,
+								reason,
+								strict_team_mode: true,
+								error: errMsg || String(err),
+							});
+							return {
+								content: [{ type: "text", text: `pi_avicenna_spawn failed: ${reason} (strict team mode enabled)${errMsg ? `\n\n${errMsg}` : ""}` }],
+								details: { role, route: "team", team: route.teamName, team_tool: route.teamTool, reason, strict_team_mode: true, error: errMsg || String(err) },
+								isError: true,
+							};
+						}
+						emitProgress(`pi-crew team call failed; falling back to legacy subprocess: ${errMsg || String(err)}`, {
+							phase: "team_exception_fallback",
+							route: "legacy",
+							team_tool: route.teamTool,
+							reason,
+							strict_team_mode: false,
+							error: errMsg || String(err),
+						});
 						console.warn(
-							`[pi_avicenna_spawn] fallback=legacy reason=team_tool_unhealthy tool=${route.teamTool} role=${role}` +
+							`[pi_avicenna_spawn] fallback=legacy reason=${reason} tool=${route.teamTool} role=${role}` +
 								(isExcludeTools
 									? ` (detected: pi-crew CLI flag issue — pi CLI may not support ${knownUnsupportedFlags}. Try updating pi or using --no-team-fallback.)`
 									: ""),
 						);
 					}
 				} else if (route.path !== "team") {
+					if (route.strictTeamMode) {
+						emitProgress(`Legacy route selected but strict team mode blocks fallback: ${route.reason}`, {
+							phase: "legacy_route_strict",
+							route: "legacy",
+							reason: route.reason,
+							team_tool: route.teamTool,
+							strict_team_mode: true,
+						});
+						return {
+							content: [{ type: "text", text: `pi_avicenna_spawn failed: ${route.reason} (strict team mode enabled)` }],
+							details: { role, route: "legacy", reason: route.reason, team_tool: route.teamTool, strict_team_mode: true },
+							isError: true,
+						};
+					}
+					emitProgress(`Using legacy subprocess route: ${route.reason}`, {
+						phase: "legacy_route_selected",
+						route: "legacy",
+						reason: route.reason,
+						strict_team_mode: route.strictTeamMode,
+					});
 					console.warn(
 						`[pi_avicenna_spawn] fallback=legacy reason=${route.reason} role=${role}`,
 					);
 				}
 
+				emitProgress("Starting legacy fallback execution", {
+					phase: "legacy_fallback_start",
+					route: "legacy",
+					contract_path: effectiveContractFile,
+				});
 				const result = await runPiSubprocess(
 					effectiveContractFile,
 					enrichedTask,
 					cwd,
 					signal,
 					role,
+					emitProgress,
 				);
 
 				if (result.error) {
+					emitProgress(`pi_avicenna_spawn failed: ${result.error}`, { phase: "error", route: "legacy" });
 					return {
 						content: [
 							{
@@ -678,16 +870,18 @@ export default function (pi: ExtensionAPI) {
 								text: `[${role}] ${result.error}${result.output ? `\n\nOutput:\n${result.output}` : ""}`,
 							},
 						],
-						details: { role, ...result.usage, error: result.error, contract_source: resolved.source },
+						details: { role, ...result.usage, error: result.error, contract_source: effectiveContractSource },
 						isError: true,
 					};
 				}
 
+				emitProgress("pi_avicenna_spawn completed", { phase: "completed", route: "legacy" });
 				return {
 					content: [{ type: "text", text: result.output || "(no output)" }],
-					details: { role, ...result.usage, contract_source: resolved.source },
+					details: { role, ...result.usage, contract_source: effectiveContractSource },
 				};
 			} catch (err: any) {
+				emitProgress(`pi_avicenna_spawn failed: ${err.message}`, { phase: "error" });
 				return {
 					content: [{ type: "text", text: `pi_avicenna_spawn failed: ${err.message}` }],
 					details: { role, error: err.message },

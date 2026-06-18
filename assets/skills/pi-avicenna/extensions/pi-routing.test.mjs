@@ -94,17 +94,63 @@ test("rejects unsafe team tool unless explicitly sanctioned", () => {
   assert.equal(sanctioned.path, "team");
 });
 
-test("builds team invocation with action run and model fallback chain", () => {
+test("parses strict team mode from role pi config", () => {
+  const route = decidePiRoute({
+    role: "coder",
+    config: { pi: { team_path_enabled: true, team: "implementation", team_tool: "team", strict_team_mode: true } },
+    availableTools: [],
+  });
+  assert.equal(route.path, "legacy");
+  assert.equal(route.reason, "team_tool_unavailable");
+  assert.equal(route.strictTeamMode, true);
+});
+
+test("parses strict team mode from env var", () => {
+  const previous = process.env.PI_AVICENNA_STRICT_TEAM_MODE;
+  process.env.PI_AVICENNA_STRICT_TEAM_MODE = "1";
+  try {
+    const route = decidePiRoute({
+      role: "coder",
+      config: { pi: { team_path_enabled: true, team: "implementation", team_tool: "team" } },
+      availableTools: ["team"],
+    });
+    assert.equal(route.path, "team");
+    assert.equal(route.strictTeamMode, true);
+  } finally {
+    if (previous === undefined) delete process.env.PI_AVICENNA_STRICT_TEAM_MODE;
+    else process.env.PI_AVICENNA_STRICT_TEAM_MODE = previous;
+  }
+});
+
+test("builds team invocation with action run, full role contract, and model fallback chain", () => {
+  const roleContract = {
+    role: "coder",
+    path: "/tmp/coder.md",
+    source: "repo-local",
+    content: "# Coder\nFull resolved contract",
+  };
   const args = buildTeamInvocation({
     teamName: "implementation",
     task: "Implement feature X",
     modelHint: "gpt-5",
     modelFallbackChain: ["gpt-5", "gpt-4.1-mini"],
+    roleContract,
   });
   assert.deepEqual(args, {
     action: "run",
     team: "implementation",
-    goal: "Implement feature X",
+    goal: [
+      "Pi Avicenna role contract for coder:",
+      "```markdown",
+      "# Coder\nFull resolved contract",
+      "```",
+      "Contract source: repo-local",
+      "Contract path: /tmp/coder.md",
+      "",
+      "Delegated task:",
+      "Implement feature X",
+    ].join("\n"),
+    role_contract: roleContract,
     model: "gpt-5",
     model_fallback_chain: ["gpt-5", "gpt-4.1-mini"],
   });
