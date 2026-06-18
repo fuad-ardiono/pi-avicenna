@@ -23,6 +23,9 @@ import { Type } from "typebox";
 import { buildTeamInvocation, decidePiRoute } from "./pi-routing.js";
 
 const VALID_ROLES = new Set(["researcher", "coder", "qa", "pr_monkey"]);
+const DEFAULT_TEAM_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_LEGACY_WALL_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_LEGACY_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const extensionDir = path.dirname(fileURLToPath(import.meta.url));
 const bundledAssetsRoot = path.basename(extensionDir) === "extensions"
 	? path.dirname(extensionDir)
@@ -188,7 +191,7 @@ function parseRoleConfigFromRegistry(
 function extractYamlSection(content: string, sectionKey: string): string | null {
 	// Match a top-level key (no leading whitespace) followed by ":"
 	// Capture everything until the next top-level key or end of string.
-	const regex = new RegExp(`^${sectionKey}:([\\s\\S]*?)(?=^[a-z_]\\w*:|\\z)`, "m");
+	const regex = new RegExp(`^${sectionKey}:([\\s\\S]*?)(?=^[a-z_]\\w*:|$)`, "m");
 	const match = content.match(regex);
 	return match ? match[0] : null;
 }
@@ -245,6 +248,41 @@ function getAvailableToolNames(ctx: any): string[] {
 	return [...names];
 }
 
+function envTimeoutMs(name: string, fallback: number): number {
+	const raw = process.env[name];
+	if (!raw) return fallback;
+	const parsed = Number(raw);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function timeoutError(message: string): Error {
+	const err = new Error(message);
+	err.name = "TimeoutError";
+	return err;
+}
+
+async function withTimeout<T>(
+	promise: Promise<T>,
+	ms: number,
+	message: string,
+	onTimeout?: () => void,
+): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<T>((_resolve, reject) => {
+				timer = setTimeout(() => {
+					onTimeout?.();
+					reject(timeoutError(message));
+				}, ms);
+			}),
+		]);
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+	}
+}
+
 async function runPiSubprocess(
 	contractPath: string,
 	task: string,
@@ -272,10 +310,19 @@ async function runPiSubprocess(
 	args.push(`Task: ${task}`);
 
 	let wasAborted = false;
+	let timeoutMessage: string | undefined;
 	let stderrBuffer = "";
 	const messages: Message[] = [];
+	const wallTimeoutMs = envTimeoutMs("PI_AVICENNA_LEGACY_WALL_TIMEOUT_MS", DEFAULT_LEGACY_WALL_TIMEOUT_MS);
+	const idleTimeoutMs = envTimeoutMs("PI_AVICENNA_LEGACY_IDLE_TIMEOUT_MS", DEFAULT_LEGACY_IDLE_TIMEOUT_MS);
 
 	const exitCode = await new Promise<number>((resolve) => {
+		let settled = false;
+		let wallTimer: ReturnType<typeof setTimeout> | undefined;
+		let idleTimer: ReturnType<typeof setTimeout> | undefined;
+		let sigkillTimer: ReturnType<typeof setTimeout> | undefined;
+		let abortListener: (() => void) | undefined;
+
 		const proc = spawn("pi", args, {
 			cwd,
 			shell: false,
@@ -283,6 +330,27 @@ async function runPiSubprocess(
 		});
 
 		let stdoutBuffer = "";
+
+		const terminate = (message: string) => {
+			if (settled || timeoutMessage) return;
+			timeoutMessage = message;
+			proc.kill("SIGTERM");
+			sigkillTimer = setTimeout(() => {
+				if (!settled) proc.kill("SIGKILL");
+			}, 5000);
+		};
+
+		const refreshIdleTimer = () => {
+			if (idleTimer !== undefined) clearTimeout(idleTimer);
+			idleTimer = setTimeout(() => {
+				terminate(`Legacy pi subprocess produced no output for ${idleTimeoutMs}ms`);
+			}, idleTimeoutMs);
+		};
+
+		wallTimer = setTimeout(() => {
+			terminate(`Legacy pi subprocess exceeded ${wallTimeoutMs}ms wall timeout`);
+		}, wallTimeoutMs);
+		refreshIdleTimer();
 
 		const processLine = (line: string) => {
 			if (!line.trim()) return;
@@ -316,6 +384,7 @@ async function runPiSubprocess(
 		};
 
 		proc.stdout.on("data", (data) => {
+			refreshIdleTimer();
 			stdoutBuffer += data.toString();
 			const lines = stdoutBuffer.split("\n");
 			stdoutBuffer = lines.pop() || "";
@@ -323,32 +392,36 @@ async function runPiSubprocess(
 		});
 
 		proc.stderr.on("data", (data) => {
+			refreshIdleTimer();
 			stderrBuffer += data.toString();
 		});
 
+		const cleanup = () => {
+			settled = true;
+			if (wallTimer !== undefined) clearTimeout(wallTimer);
+			if (idleTimer !== undefined) clearTimeout(idleTimer);
+			if (sigkillTimer !== undefined) clearTimeout(sigkillTimer);
+			if (signal && abortListener) signal.removeEventListener("abort", abortListener);
+		};
+
 		proc.on("close", (code) => {
+			cleanup();
 			if (stdoutBuffer.trim()) processLine(stdoutBuffer);
 			resolve(code ?? 0);
 		});
 
 		proc.on("error", () => {
+			cleanup();
 			resolve(1);
 		});
 
 		if (signal) {
-			let sigkillTimer: ReturnType<typeof setTimeout> | undefined;
-			const killProc = () => {
+			abortListener = () => {
 				wasAborted = true;
-				proc.kill("SIGTERM");
-				sigkillTimer = setTimeout(() => {
-					if (!proc.killed) proc.kill("SIGKILL");
-				}, 5000);
+				terminate("Aborted by user");
 			};
-			if (signal.aborted) killProc();
-			else signal.addEventListener("abort", killProc, { once: true });
-			proc.on("close", () => {
-				if (sigkillTimer !== undefined) clearTimeout(sigkillTimer);
-			});
+			if (signal.aborted) abortListener();
+			else signal.addEventListener("abort", abortListener, { once: true });
 		}
 	});
 
@@ -356,6 +429,9 @@ async function runPiSubprocess(
 
 	if (wasAborted) {
 		result.error = "Aborted by user";
+	} else if (timeoutMessage) {
+		const stderr = stderrBuffer.trim();
+		result.error = `${timeoutMessage}${stderr ? `; stderr: ${stderr}` : ""}`;
 	} else if (exitCode !== 0) {
 		const stderr = stderrBuffer.trim();
 		result.error = `Sub-process exited with code ${exitCode}${stderr ? `: ${stderr}` : ""}`;
@@ -527,7 +603,19 @@ export default function (pi: ExtensionAPI) {
 					try {
 						const callTool =
 							(ctx as any)?.callTool || (ctx as any)?.executeTool || (pi as any)?.callTool;
-						const teamResult = await callTool(route.teamTool, payload, signal);
+						const teamTimeoutMs = envTimeoutMs("PI_AVICENNA_TEAM_TIMEOUT_MS", DEFAULT_TEAM_TIMEOUT_MS);
+						const teamAbort = new AbortController();
+						const abortTeam = () => teamAbort.abort();
+						if (signal?.aborted) abortTeam();
+						else signal?.addEventListener("abort", abortTeam, { once: true });
+						const teamResult = await withTimeout(
+							callTool(route.teamTool, payload, teamAbort.signal),
+							teamTimeoutMs,
+							`Team tool ${route.teamTool} exceeded ${teamTimeoutMs}ms timeout`,
+							abortTeam,
+						).finally(() => {
+							signal?.removeEventListener("abort", abortTeam);
+						});
 						if (teamResult?.isError) {
 							const errText = Array.isArray(teamResult.content)
 								? teamResult.content.map((c: any) => c?.text || "").join(" ")
