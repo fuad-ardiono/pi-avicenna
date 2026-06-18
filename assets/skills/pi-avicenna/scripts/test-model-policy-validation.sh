@@ -6,8 +6,8 @@ validator="${repo_root}/skills/pi-avicenna/scripts/validate-model-policy.sh"
 
 echo "[test] valid policy shape"
 valid_dir="$(mktemp -d)"
-mkdir -p "${valid_dir}/.pi-avicenna"
-cat > "${valid_dir}/.pi-avicenna/model-policy.yaml" <<'YAML'
+mkdir -p "${valid_dir}/.avicenna"
+cat > "${valid_dir}/.avicenna/model-policy.yaml" <<'YAML'
 version: 1
 fallback:
   on_missing: warn
@@ -65,8 +65,8 @@ rm -rf "${tmp_dir}"
 
 echo "[test] malformed policy shape"
 invalid_dir="$(mktemp -d)"
-mkdir -p "${invalid_dir}/.pi-avicenna"
-cat > "${invalid_dir}/.pi-avicenna/model-policy.yaml" <<'YAML'
+mkdir -p "${invalid_dir}/.avicenna"
+cat > "${invalid_dir}/.avicenna/model-policy.yaml" <<'YAML'
 version: 1
 host_aliases:
   claude: claude

@@ -9,7 +9,7 @@ if [ -n "${PI_AVICENNA_PROJECT_ROOT:-}" ]; then
 else
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fi
-wiki_config="${repo_root}/.pi-avicenna/wiki.yaml"
+wiki_config="${repo_root}/.avicenna/wiki.yaml"
 helper="${repo_root}/skills/pi-avicenna/scripts/wiki-hygiene.py"
 
 if [ ! -f "${wiki_config}" ]; then

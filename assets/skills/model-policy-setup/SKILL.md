@@ -1,11 +1,11 @@
 ---
 name: model-policy-setup
-description: Bootstrap pi-avicenna model policy config. Creates .pi-avicenna/model-policy.yaml if missing, or overwrite with --force.
+description: Bootstrap pi-avicenna model policy config. Creates .avicenna/model-policy.yaml if missing, or overwrite with --force.
 ---
 
 # Model Policy Setup
 
-Initializes `.pi-avicenna/model-policy.yaml` with defaults for:
+Initializes `.avicenna/model-policy.yaml` with defaults for:
 - host aliases (`claude`, `codex`, `pi`, `hermes`)
 - role tiers (`commander`, `researcher`, `coder`, `qa`, `pr_monkey`)
 - risk overrides (`low` / `medium` / `high`)
@@ -24,7 +24,7 @@ skills/model-policy-setup/scripts/setup-model-policy.sh --force
 
 ## Customization
 
-After bootstrap, edit `.pi-avicenna/model-policy.yaml`:
+After bootstrap, edit `.avicenna/model-policy.yaml`:
 - change `role_tiers` per role
 - tune `risk_overrides` (e.g., force `coder: low` on low-risk tasks)
 - set `host_models.<host>.<tier>` to your available models

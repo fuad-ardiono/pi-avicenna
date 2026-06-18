@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { renderTaskMarkdown, writeMarkdown } from './markdown.js';
-import type { PiAvicennaTask, WorkflowEvent } from './state.js';
+import type { PiAvicennaTask, RuntimeManifest, WorkflowEvent } from './state.js';
 
 export interface TaskCaptureEnvelope {
   task: PiAvicennaTask;
@@ -8,14 +8,9 @@ export interface TaskCaptureEnvelope {
 }
 
 export async function captureTask(
-  stateRoot: string,
-  hubRoot: string,
-  draftRoot: string,
+  manifest: RuntimeManifest,
   envelope: TaskCaptureEnvelope,
 ): Promise<void> {
-  const currentTaskPath = join(stateRoot, 'current-task.md');
-  const hubTaskPath = join(hubRoot, 'current-task.md');
-  const draftTaskPath = join(draftRoot, 'current-task.md');
   const content = [
     renderTaskMarkdown(envelope.task),
     '',
@@ -25,9 +20,14 @@ export async function captureTask(
     `- **Occurred**: ${envelope.event.occurredAt}`,
   ].join('\n');
 
-  await Promise.all([
-    writeMarkdown(currentTaskPath, content),
-    writeMarkdown(hubTaskPath, content),
-    writeMarkdown(draftTaskPath, content),
-  ]);
+  const writeTargets = [
+    join(manifest.localStateRoot, 'current-task.md'),
+    join(manifest.localHubRoot, 'current-task.md'),
+    join(manifest.localDraftRoot, 'current-task.md'),
+    join(manifest.agentProjectStateRoot, 'current-task.md'),
+    join(manifest.agentProjectHubRoot, 'current-task.md'),
+    join(manifest.agentProjectDraftRoot, 'current-task.md'),
+  ];
+
+  await Promise.all(writeTargets.map((path) => writeMarkdown(path, content)));
 }

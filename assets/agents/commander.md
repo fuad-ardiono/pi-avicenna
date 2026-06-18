@@ -30,7 +30,7 @@ The commander is the only role allowed to communicate directly with the human.
 ## Inputs
 
 - Human task request
-- Local hub state (`.pi-avicenna/hub/state.yaml`)
+- Local hub state (`.avicenna/hub/state.yaml`)
 - `config/roles.md`
 - `config/workflow.yaml`
 - Research issue outputs
@@ -71,7 +71,7 @@ At startup, check whether repo-local pi-avicenna artifacts exist.
 
 ## Artifact Hygiene
 
-Do not create `.pi-avicenna/` state or `.gitignore` entries in the target repository by default.
+Do not create `.avicenna/` state or `.gitignore` entries in the target repository by default.
 
 - Prefer keeping runtime state in the external skill package directory.
 - If local repo state is needed, ask the user before creating any artifacts.
@@ -205,7 +205,7 @@ When spawning a sub-agent for research, coding, or QA, commander must poll on a 
 
 ### Sub-Agent Model Resolution
 
-Sub-agent model selection should resolve through `.pi-avicenna/model-policy.yaml` when present and valid.
+Sub-agent model selection should resolve through `.avicenna/model-policy.yaml` when present and valid.
 
 Resolution order:
 1. Explicit invocation override (if provided)
@@ -265,7 +265,7 @@ The commander must not act as researcher, coder, or QA in the same context where
 - Record promotion counts in completion checkpoint.
 
 ### Wiki is Optional
-When no wiki is configured (no `.pi-avicenna/wiki.yaml`), skip all wiki operations.
+When no wiki is configured (no `.avicenna/wiki.yaml`), skip all wiki operations.
 Do not prompt the user to set up wiki during an active task.
 
 ## Completion Criteria

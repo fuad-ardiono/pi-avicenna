@@ -1,9 +1,9 @@
 # Hub Contract
 
 This file is the canonical, version-controlled copy of the hub contract.
-It is mirrored at `.pi-avicenna/hub/README.md` at runtime.
+It is mirrored at `.avicenna/hub/README.md` at runtime.
 
-**Do not edit `.pi-avicenna/hub/README.md` directly** — edit this file instead,
+**Do not edit `.avicenna/hub/README.md` directly** — edit this file instead,
 and copy it to the runtime location during warmup.
 
 ---
@@ -16,7 +16,7 @@ checkpoint logs, or format duplicates. One read loads everything the commander
 needs. One write saves everything.
 
 ```
-.pi-avicenna/hub/
+.avicenna/hub/
   state.yaml    # Single source of truth — all state, all phase data
   README.md     # This file (mirrored from config/hub-contract.md)
 ```

@@ -47,7 +47,7 @@ roles:
       team_tool: team
       team: implementation
       # model_hint and model_fallback_chain are resolved from
-      # .pi-avicenna/model-policy.yaml (role_tiers + host_models)
+      # .avicenna/model-policy.yaml (role_tiers + host_models)
       # at runtime. Override here only for explicit per-role overrides.
       model_hint: ""
       model_fallback_chain: ""

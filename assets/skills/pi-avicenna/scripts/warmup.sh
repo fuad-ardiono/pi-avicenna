@@ -7,7 +7,7 @@ if [ -n "${PI_AVICENNA_PROJECT_ROOT:-}" ]; then
 else
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fi
-runtime_dir="${repo_root}/.pi-avicenna"
+runtime_dir="${repo_root}/.avicenna"
 preflight_dir="${runtime_dir}/preflight"
 hub_dir="${runtime_dir}/hub"
 report_file="${preflight_dir}/skills-status.md"
@@ -15,11 +15,11 @@ agents_report_file="${preflight_dir}/agents-status.md"
 dependencies_file="${repo_root}/config/skill-dependencies.md"
 registry_file="${repo_root}/agents/registry.yaml"
 subagent_protocol_file="${repo_root}/skills/pi-avicenna/subagent-protocol.md"
-model_policy_file="${repo_root}/.pi-avicenna/model-policy.yaml"
+model_policy_file="${repo_root}/.avicenna/model-policy.yaml"
 legacy_model_policy_file="${repo_root}/config/model-policy.yaml"
 model_policy_validator="${repo_root}/skills/pi-avicenna/scripts/validate-model-policy.sh"
 
-PI_HOME="${PI_HOME:-${HOME}/.agents}"
+PI_HOME="${PI_HOME:-${HOME}/.avicenna-agent}"
 
 mkdir -p "${runtime_dir}" "${preflight_dir}" "${runtime_dir}/sessions" "${hub_dir}"
 
@@ -33,19 +33,14 @@ required_skills=(
   "obra/systematical-debugging"
 )
 
+# Search root for skill SKILL.md files: home install only.
+# ensureHomeInstall seeds all bundled skills (including obra) to PI_HOME/skills/.
 search_roots=(
-  "${repo_root}/skills"
-  "${CODEX_HOME:-${HOME}/.codex}/skills"
-  "${HOME}/.claude/skills"
-  "${HOME}/.antigravity/skills"
+  "${PI_HOME}/skills"
 )
 
 if [ -n "${PI_AVICENNA_SKILLS_HOME:-}" ]; then
-  search_roots=(
-    "${search_roots[@]:0:1}"
-    "${PI_AVICENNA_SKILLS_HOME}"
-    "${search_roots[@]:1}"
-  )
+  search_roots=("${PI_AVICENNA_SKILLS_HOME}")
 fi
 
 {
@@ -99,7 +94,7 @@ fi
   echo
   echo "## Runtime Hygiene"
   echo "- runtime_dir: \`${runtime_dir}\`"
-  echo "- gitignore_rule: \`.pi-avicenna/\`"
+  echo "- gitignore_rule: \`.avicenna/\`"
   echo "- dependencies_file_present: $([ -f "${dependencies_file}" ] && echo "yes" || echo "no")"
 } >> "${report_file}"
 
@@ -134,7 +129,7 @@ fi
   fi
 } >> "${report_file}"
 
-# --- Design Gap 1: Agent contracts preflight check ---
+# --- Agent contracts preflight check ---
 agent_contracts_dir="${repo_root}/agents"
 user_agent_contracts_dir="${PI_HOME}/agents"
 
@@ -219,7 +214,7 @@ if [ -f "${contract_file}" ]; then
 fi
 
 # ==== Stale Wiki Check (portable) ====
-wiki_config="${repo_root}/.pi-avicenna/wiki.yaml"
+wiki_config="${repo_root}/.avicenna/wiki.yaml"
 wiki_hygiene_helper="${repo_root}/skills/pi-avicenna/scripts/wiki-hygiene.py"
 if [ -f "${wiki_config}" ]; then
   set +e

@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="${1:-$(pwd)}"
 allow_missing="${ALLOW_MISSING_POLICY:-0}"
 warn_only="${WARN_ONLY_POLICY:-1}"
-policy_file="${repo_root}/.pi-avicenna/model-policy.yaml"
+policy_file="${repo_root}/.avicenna/model-policy.yaml"
 legacy_policy_file="${repo_root}/config/model-policy.yaml"
 
 warn() {

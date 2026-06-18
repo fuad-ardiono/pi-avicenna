@@ -8,4 +8,6 @@ export * from './runtime/task-capture.js';
 export * from './runtime/archive.js';
 export * from './runtime/home-install.js';
 export * from './runtime/project-mode.js';
+export * from './runtime/skill-registry.js';
+export * from './runtime/task-records.js';
 export * from './runtime/workflow.js';

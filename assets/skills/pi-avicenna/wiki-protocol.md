@@ -123,7 +123,7 @@ When wiki is configured, the commander checks page freshness during `intake`:
 3. Record stale page paths in top-level hub state under `wiki.stale_pages`.
 4. Do not block work on stale pages — flag them for later cleanup.
 
-**Configuration** (add to `.pi-avicenna/wiki.yaml`):
+**Configuration** (add to `.avicenna/wiki.yaml`):
 
 ```yaml
 wiki:
@@ -145,7 +145,7 @@ Before promoting an L1 item to L2, the commander:
 
 A script `skills/pi-avicenna/scripts/kb-stale.sh` implements the stale page scanner:
 
-1. Parses `.pi-avicenna/wiki.yaml` via the bundled dependency-free helper (safe simple YAML subset; no `eval`, PyYAML, or GNU-only shell features).
+1. Parses `.avicenna/wiki.yaml` via the bundled dependency-free helper (safe simple YAML subset; no `eval`, PyYAML, or GNU-only shell features).
 2. Scans all pages under `projects/<name>/insights/` and `projects/<name>/decisions/`.
 3. Reads the `freshness` field from each page's metadata header.
 4. Lists pages where freshness is older than `stale_threshold_days` (default: 90).

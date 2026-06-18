@@ -98,14 +98,14 @@ tmpdir4="$(mktemp -d)"
 trap 'rm -rf "${tmpdir4}" "${tmpdir3}" "${tmpdir2}" "${tmpdir}"' EXIT
 
 # Minimal pi-avicenna structure for warmup — just enough to reach wiki check
-mkdir -p "${tmpdir4}/.pi-avicenna/preflight" "${tmpdir4}/.pi-avicenna/hub" "${tmpdir4}/config"
+mkdir -p "${tmpdir4}/.avicenna/preflight" "${tmpdir4}/.avicenna/hub" "${tmpdir4}/config"
 mkdir -p "${tmpdir4}/skills/pi-avicenna/scripts"
 mkdir -p "${tmpdir4}/wiki/projects/demo/insights"
 touch "${tmpdir4}/config/skill-dependencies.md"
 touch "${tmpdir4}/.gitignore"
 cp "${helper}" "${tmpdir4}/skills/pi-avicenna/scripts/wiki-hygiene.py"
 
-cat > "${tmpdir4}/.pi-avicenna/wiki.yaml" <<EOF
+cat > "${tmpdir4}/.avicenna/wiki.yaml" <<EOF
 wiki:
   root: "${tmpdir4}/wiki"
   project: demo
@@ -125,7 +125,7 @@ PI_AVICENNA_PROJECT_ROOT="${tmpdir4}" \
   bash "${warmup_script}" 2>&1 || true
 
 # warmup may exit 2 (missing system skills), but wiki section should still run
-grep -E '(stale|wiki)' "${tmpdir4}/.pi-avicenna/preflight/skills-status.md" || {
+grep -E '(stale|wiki)' "${tmpdir4}/.avicenna/preflight/skills-status.md" || {
   echo "[test 4] NOTE: warmup exited before wiki check (expected with minimal test env)"
   echo "[test 4] PASS (warmup ran without crashing)"
 }
@@ -135,10 +135,10 @@ echo "[test 5] warmup does not mutate unrelated repo files"
 tmpdir5="$(mktemp -d)"
 trap 'rm -rf "${tmpdir5}" "${tmpdir4}" "${tmpdir3}" "${tmpdir2}" "${tmpdir}"' EXIT
 
-mkdir -p "${tmpdir5}/.pi-avicenna/preflight" "${tmpdir5}/.pi-avicenna/hub"
+mkdir -p "${tmpdir5}/.avicenna/preflight" "${tmpdir5}/.avicenna/hub"
 cat > "${tmpdir5}/.gitignore" <<'EOF'
 # keep stable
-.pi-avicenna/
+.avicenna/
 EOF
 before_checksum="$(sha256sum "${tmpdir5}/.gitignore" | awk '{print $1}')"
 

@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 
 export type WorkflowStage =
   | 'intake'
+  | 'research'
   | 'planning'
   | 'coding'
   | 'qa'
@@ -33,8 +34,13 @@ export interface RuntimePaths {
   localDraftRoot: string;
   localArchiveRoot: string;
   localTasksRoot: string;
+  localTaskRecordsRoot: string;
   agentRoot: string;
   agentProjectRoot: string;
+  agentProjectStateRoot: string;
+  agentProjectHubRoot: string;
+  agentProjectDraftRoot: string;
+  agentProjectTaskRecordsRoot: string;
   agentArchiveRoot: string;
   agentSkillsRoot: string;
   agentAgentsRoot: string;
@@ -56,6 +62,7 @@ export interface WorkflowEvent {
   kind:
     | 'task-captured'
     | 'stage-changed'
+    | 'research-started'
     | 'planning-started'
     | 'coding-requested'
     | 'qa-requested'
@@ -69,10 +76,22 @@ export interface WorkflowEvent {
   payload?: Record<string, unknown>;
 }
 
+export interface PhaseRecord {
+  id: string;
+  taskId: string;
+  phase: WorkflowStage;
+  actor: 'commander' | 'researcher' | 'coder' | 'qa' | 'pr_monkey';
+  summary: string;
+  details?: string;
+  skills: string[];
+  occurredAt: string;
+}
+
 export interface ArchiveRecord {
   task: PiAvicennaTask;
   manifest: RuntimeManifest;
   capturedEvents: WorkflowEvent[];
+  phaseRecords: PhaseRecord[];
 }
 
 export async function writeJsonFile(path: string, value: unknown): Promise<void> {

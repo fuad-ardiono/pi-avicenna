@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { ArchiveRecord, PiAvicennaTask, RuntimeManifest, WorkflowEvent } from './state.js';
+import type { ArchiveRecord, PhaseRecord, PiAvicennaTask, RuntimeManifest, WorkflowEvent } from './state.js';
 
 async function writeMarkdown(path: string, content: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
@@ -45,8 +45,13 @@ export function renderManifestMarkdown(manifest: RuntimeManifest): string {
     bullet('Hub', manifest.localHubRoot),
     bullet('Draft', manifest.localDraftRoot),
     bullet('Archive', manifest.localArchiveRoot),
+    bullet('Task records', manifest.localTaskRecordsRoot),
     bullet('Agent root', manifest.agentRoot),
     bullet('Agent project', manifest.agentProjectRoot),
+    bullet('Agent project state', manifest.agentProjectStateRoot),
+    bullet('Agent project hub', manifest.agentProjectHubRoot),
+    bullet('Agent project draft', manifest.agentProjectDraftRoot),
+    bullet('Agent project task records', manifest.agentProjectTaskRecordsRoot),
     bullet('Agent archive', manifest.agentArchiveRoot),
     bullet('Agent skills', manifest.agentSkillsRoot),
     bullet('Agent agents', manifest.agentAgentsRoot),
@@ -79,15 +84,51 @@ export function renderEventMarkdown(event: WorkflowEvent): string {
   return lines.filter((line) => line !== undefined).join('\n').trimEnd();
 }
 
+export function renderPhaseRecordMarkdown(record: PhaseRecord): string {
+  const skillList = record.skills.length > 0
+    ? record.skills.map((s) => `- \`${s}\``).join('\n')
+    : '- None';
+
+  const lines = [
+    `# ${record.phase} — ${record.summary}`,
+    '',
+    bullet('Record ID', record.id),
+    bullet('Task ID', record.taskId),
+    bullet('Phase', record.phase),
+    bullet('Actor', record.actor),
+    bullet('Occurred', record.occurredAt),
+    '',
+    '## Skills',
+    skillList,
+    '',
+    record.details ? '## Details' : undefined,
+    record.details,
+  ];
+
+  return lines.filter((line) => line !== undefined).join('\n').trimEnd();
+}
+
+export function phaseRecordFileName(record: PhaseRecord): string {
+  const safeTimestamp = record.occurredAt.replace(/[:.]/g, '-');
+  return `${safeTimestamp}-${record.phase}.md`;
+}
+
 export function renderArchiveMarkdown(record: ArchiveRecord): string {
   const eventSummary = record.capturedEvents.length > 0
     ? record.capturedEvents.map((event) => `- ${event.occurredAt} — ${event.kind} (${event.id})`).join('\n')
+    : '- None';
+
+  const phaseSummary = record.phaseRecords.length > 0
+    ? record.phaseRecords.map((pr) => `- ${pr.occurredAt} — [${pr.phase}] ${pr.actor}: ${pr.summary}`).join('\n')
     : '- None';
 
   return [
     `# Archive ${record.task.id}`,
     '',
     renderTaskMarkdown(record.task),
+    '',
+    '## Phase records',
+    phaseSummary,
     '',
     '## Captured events',
     eventSummary,

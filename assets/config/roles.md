@@ -10,7 +10,7 @@ New roles should be added here before they are introduced into the workflow.
 - All non-commander roles report through structured local hub updates and GitHub artifacts.
 - Every role must have a clear input contract, output contract, and escalation rule.
 - Roles may be extended later, but v1 assumes a fixed core set.
-- Model choice resolves via `.pi-avicenna/model-policy.yaml` (role tier + host mapping) when valid.
+- Model choice resolves via `.avicenna/model-policy.yaml` (role tier + host mapping) when valid.
 - Backward compatibility: if policy is missing or invalid, warn and inherit the current thread's model.
 
 ## Available Roles

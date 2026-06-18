@@ -8,7 +8,7 @@ fi
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "${script_dir}/../../.." && pwd)"
-runtime_dir="${repo_root}/.pi-avicenna"
+runtime_dir="${repo_root}/.avicenna"
 policy_file="${runtime_dir}/model-policy.yaml"
 legacy_policy_file="${repo_root}/config/model-policy.yaml"
 

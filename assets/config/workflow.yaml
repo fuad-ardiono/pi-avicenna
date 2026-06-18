@@ -13,7 +13,7 @@ states:
     exit_criteria:
       - Warm-up checklist is executed.
       - "Runtime artifacts are located per `runtime_behavior.artifact_location` setting."
-      - "If artifacts are repo-local, `.pi-avicenna/` ignore rule is present in `.gitignore`."
+      - "If artifacts are repo-local, `.avicenna/` ignore rule is present in `.gitignore`."
       - "Auxiliary skill preflight is recorded from `config/skill-dependencies.md`."
       - "`obra/brainstorming` is invoked to restate the task, assumptions, and success criteria."
       - Task summary is recorded in the hub.
@@ -161,7 +161,7 @@ runtime_behavior:
   artifact_location:
     default: external
     description: >
-      Runtime artifacts (.pi-avicenna/ state, gitignore entries) should NOT be
+      Runtime artifacts (.avicenna/ state, gitignore entries) should NOT be
       created in the target repository by default. Prefer keeping pi-avicenna
       state in the external skill package directory. If local repo state is
       required, commander must ask the user first before creating any artifacts.
@@ -169,7 +169,7 @@ runtime_behavior:
     behavior: external_runtime
     description: >
       When repo-local pi-avicenna artifacts (skills/pi-avicenna/, config/,
-      .pi-avicenna/) do not exist, do NOT try to create them or simulate a full
+      .avicenna/) do not exist, do NOT try to create them or simulate a full
       install. Instead, enter external-runtime mode immediately: use the external
       skill package for config, skip repo-local warmup steps, and record in hub
       state that the workflow is driven externally.

@@ -13,20 +13,20 @@ because it is installed.
 
 This skill expects the pi-avicenna Pi package to be installed. Package assets live
 inside the installed package under `assets/` (for example `assets/agents/` and
-`assets/config/`), while project runtime state lives under `.pi-avicenna/`.
+`assets/config/`), while project runtime state lives under `.avicenna/`.
 
 ## Startup Warm-Up Checklist
 
 Run this checklist immediately when `pi-avicenna` is invoked:
 
 1. Run the package warmup script if available: `assets/skills/pi-avicenna/scripts/warmup.sh` from the installed package root, or `skills/pi-avicenna/scripts/warmup.sh` in a copied legacy install.
-2. Ensure runtime artifacts are dot-prefixed under `.pi-avicenna/`.
-3. Confirm the repository already ignores `.pi-avicenna/`; warmup must not edit `.gitignore`.
+2. Ensure runtime artifacts are dot-prefixed under `.avicenna/`.
+3. Confirm the repository already ignores `.avicenna/`; warmup must not edit `.gitignore`.
 4. Ensure required auxiliary skills are available per `assets/config/skill-dependencies.md`.
 5. Ensure the package provides `assets/agents/registry.yaml` and `assets/skills/pi-avicenna/subagent-protocol.md`.
 6. If project-local `config/model-policy.yaml` is missing, use the bundled `assets/config/model-policy.yaml` defaults or run `assets/skills/model-policy-setup/scripts/setup-model-policy.sh` to bootstrap a project-local copy. Inform the user they should edit the `host_models` section to match their available models.
 7. If preflight fails, record a `blocked` overlay or explicit fallback notes before continuing.
-8. If `.pi-avicenna/wiki.yaml` exists, read `projects/<name>/index.md` from the configured wiki root for project context.
+8. If `.avicenna/wiki.yaml` exists, read `projects/<name>/index.md` from the configured wiki root for project context.
 9. **If wiki is configured, apply the Retrieval Protocol**: extract task keywords, search project index for matching categories/tags, read up to 5 relevant wiki pages. Do not read the full wiki.
 10. **If wiki is configured, check freshness metadata** on each wiki page read. Flag pages older than 90 days as stale and record their page paths in top-level hub state under `wiki.stale_pages`.
 11. On pi: verify the `pi_avicenna_spawn` tool is available after `pi install` and `/reload`. If absent, delegation will not work — record a `blocked` overlay and continue without sub-agent spawning.
@@ -133,7 +133,7 @@ When this skill is invoked, use the local package artifacts in this order:
 2. Read `config/workflow.yaml` for the canonical workflow states and transitions.
 3. Read `agents/registry.yaml` for host-specific sub-agent mappings.
 4. Read `skills/pi-avicenna/subagent-protocol.md` for the host-aware delegation contract.
-5. Read `.pi-avicenna/hub/README.md` for the local hub state contract.
+5. Read `.avicenna/hub/README.md` for the local hub state contract.
 6. Read `config/skill-dependencies.md` for required external skills.
 7. Read the supporting workflow docs in `skills/` as needed:
    - `task-intake-and-decomposition/SKILL.md`

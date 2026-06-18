@@ -3,8 +3,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 project_name="$(basename "${repo_root}")"
-wiki_root_default="${HOME}/.pi-avicenna/wiki"
-pref_file="${repo_root}/.pi-avicenna/wiki.yaml"
+wiki_root_default="${HOME}/.avicenna/wiki"
+pref_file="${repo_root}/.avicenna/wiki.yaml"
 
 echo "Pi Avicenna Wiki Setup"
 echo "====================="
